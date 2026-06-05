@@ -447,6 +447,12 @@ def extrair_nfse(nome_arquivo: str, conteudo: bytes, cnpj_empresa: str = "") -> 
         ("valorcofins",),
     ])
 
+    tp_ret_pis_cofins = get_por_sufixo(caminhos, [
+        ("tribfed", "piscofins", "tpretpiscofins"),
+        ("piscofins", "tpretpiscofins"),
+        ("tpretpiscofins",),
+    ])
+
     # Retenções federais padrão nacional
     v_irrf = valor(caminhos, [
         ("tribfed", "vretirrf"),
@@ -476,9 +482,18 @@ def extrair_nfse(nome_arquivo: str, conteudo: bytes, cnpj_empresa: str = "") -> 
         ("valorcofinsretido",),
     ])
 
-    # Preferência: se houver vRetPIS/vRetCOFINS explícito, usa; se não, usa vPis/vCofins do grupo piscofins.
-    pis_retido = v_ret_pis_extra if v_ret_pis_extra else v_pis
-    cofins_retido = v_ret_cofins_extra if v_ret_cofins_extra else v_cofins
+    # Se tpRetPisCofins vier explícito como sem retenção, zera PIS/COFINS retidos.
+    # Caso contrário, mantém a regra de compatibilidade entre layouts.
+    tp_ret_pis_cofins_norm = limpar_texto(tp_ret_pis_cofins).lower()
+    sem_ret_pis_cofins = tp_ret_pis_cofins_norm in ("0", "2", "false", "nao", "não", "n")
+
+    if sem_ret_pis_cofins:
+        pis_retido = 0.0
+        cofins_retido = 0.0
+    else:
+        # Preferência: se houver vRetPIS/vRetCOFINS explícito, usa; se não, usa vPis/vCofins.
+        pis_retido = v_ret_pis_extra if v_ret_pis_extra else v_pis
+        cofins_retido = v_ret_cofins_extra if v_ret_cofins_extra else v_cofins
 
     # Outros tributos/retidos
     v_outros_retidos = somar_tags(caminhos, [
@@ -588,6 +603,7 @@ def extrair_nfse(nome_arquivo: str, conteudo: bytes, cnpj_empresa: str = "") -> 
         "Alíquota COFINS": aliq_cofins,
         "COFINS": v_cofins,
         "COFINS Retido/Informado": cofins_retido,
+        "Indicador Ret. PIS/COFINS": tp_ret_pis_cofins,
         "IRRF Retido": v_irrf,
         "CSLL Retido": v_csll,
         "INSS/CP Retido": v_inss_cp,
